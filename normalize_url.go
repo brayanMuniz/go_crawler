@@ -1,24 +1,26 @@
 package main
 
 import (
-	"golang.org/x/net/html"
+	"fmt"
 	"net/url"
 	"strings"
+
+	"golang.org/x/net/html"
 )
 
-func normalizeURL(unformattedUrl string) (string, error) {
-	u, err := url.Parse(unformattedUrl)
+func normalizeURL(rawURL string) (string, error) {
+	parsedURL, err := url.Parse(rawURL)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("couldn't parse URL: %w", err)
 	}
 
-	formattedPath := u.Path
-	if u.Path[len(u.Path)-1] == '/' {
-		formattedPath = formattedPath[:len(formattedPath)-1]
-	}
+	fullPath := parsedURL.Host + parsedURL.Path
 
-	return strings.ToLower(u.Host) + formattedPath, nil
+	fullPath = strings.ToLower(fullPath)
 
+	fullPath = strings.TrimSuffix(fullPath, "/")
+
+	return fullPath, nil
 }
 
 func getURLsFromHTML(htmlBody, rawBaseURL string) ([]string, error) {

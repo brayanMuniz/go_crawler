@@ -6,47 +6,116 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 )
 
 func main() {
-	if len(os.Args) < 2 {
-		println("no website provided")
+	if len(os.Args) < 4 {
+		println("Not enough arguments provided")
+		fmt.Println("usage: crawler <baseURL> <maxConcurrency> <maxPages>")
 		os.Exit(1)
 	}
 
-	if len(os.Args) > 2 {
+	if len(os.Args) > 4 {
 		println("too many arguments provided")
+		fmt.Println("usage: crawler <baseURL> <maxConcurrency> <maxPages>")
 		os.Exit(1)
 	}
 
 	baseUrl := os.Args[1]
+	maxConcurrency, err := strconv.Atoi(os.Args[2])
+	if err != nil {
+		println("max concurrency arg is not a number")
+		os.Exit(1)
+	}
+
+	maxPages, err := strconv.Atoi(os.Args[3])
+	if err != nil {
+		println("max pages arg is not a number")
+		os.Exit(1)
+	}
+
+	cfg, err := configure(baseUrl, maxConcurrency, maxPages)
+
+	println("Max concurrency: ", maxConcurrency)
+	println("Max pages: ", cfg.maxPages)
+
 	println("starting crawl of: ", baseUrl)
 
-	baseUrlParsed, err := url.Parse(baseUrl)
+	cfg.wg.Add(1)
+	go cfg.crawlPage(baseUrl)
+	cfg.wg.Wait()
+
+	printReport(cfg.pages, baseUrl)
+}
+
+func (cfg *config) crawlPage(rawCurrentURL string) {
+	cfg.concurrencyControl <- struct{}{}
+	defer func() {
+		<-cfg.concurrencyControl
+		cfg.wg.Done()
+	}()
+
+	if cfg.pagesLen() >= cfg.maxPages {
+		return
+	}
+
+	u, err := url.Parse(rawCurrentURL)
 	if err != nil {
-		fmt.Println("Not able to parse the base url")
-		os.Exit(1)
+		print(err)
+		return
 	}
 
-	visited := make(map[string]int)
+	resolved := cfg.baseURL.ResolveReference(u)
+	if resolved.Host != cfg.baseURL.Host {
+		return
+	}
 
-	htmlString, err := getHTML(baseUrl)
+	normalURL, err := normalizeURL(resolved.String())
 	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
+		print(err)
+		return
 	}
-	visited[baseUrlParsed.String()] += 1
 
-	extractedUrls, err := getURLsFromHTML(htmlString, baseUrl)
+	cfg.mu.Lock()
+	if cfg.pages[normalURL] != 0 {
+		cfg.mu.Unlock()
+		return
+	} else {
+		cfg.pages[normalURL] = 1
+		if len(cfg.pages) >= cfg.maxPages {
+			println("Hit max amount of pages", len(cfg.pages))
+			cfg.mu.Unlock()
+			return
+		}
+	}
+	cfg.mu.Unlock()
+
+	extractedHTML, err := getHTML(resolved.String())
 	if err != nil {
-		println("Could not extract urls from html")
-		os.Exit(1)
+		return
 	}
 
-	for _, extracted_url := range extractedUrls {
-		crawlPage(baseUrlParsed, extracted_url, visited)
+	// associated urls
+	extractedURLS, err := getURLsFromHTML(extractedHTML, cfg.baseURL.String())
+	if err != nil {
+		return
+	} else {
+		for _, nextURL := range extractedURLS {
+			cfg.wg.Add(1)
+			go cfg.crawlPage(nextURL)
+		}
 	}
+
+}
+
+func printReport(pages map[string]int, baseURL string) {
+	fmt.Println("=============================")
+	fmt.Printf("REPORT for %s\n", baseURL)
+	fmt.Println("=============================")
+
+	// TODO: format here
 
 }
 
@@ -69,43 +138,4 @@ func getHTML(rawURL string) (string, error) {
 		return "", err
 	}
 	return string(htmlString), nil
-}
-
-func crawlPage(baseUrlParsed *url.URL, rawCurrentURL string, pages map[string]int) {
-	u, err := url.Parse(rawCurrentURL)
-	if err != nil {
-		print(err)
-		return
-	}
-
-	if pages[u.String()] != 0 {
-		println("Already visited", u.String())
-		return
-	}
-
-	resolved := baseUrlParsed.ResolveReference(u)
-	if resolved.Host != baseUrlParsed.Host {
-		println("Host is not the same: ", u.Host)
-		return
-	}
-
-	extractedHTML, err := getHTML(u.String())
-	if err != nil {
-		fmt.Println("Failed to get HTML for", u.String())
-		return
-	} else {
-		pages[rawCurrentURL] += 1
-		// get only associated urls
-		extractedURLS, err := getURLsFromHTML(extractedHTML, baseUrlParsed.String())
-		if err != nil {
-			fmt.Println(err)
-			return
-		} else {
-			for _, u := range extractedURLS {
-				crawlPage(baseUrlParsed, u, pages)
-			}
-		}
-
-	}
-
 }

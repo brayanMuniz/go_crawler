@@ -31,6 +31,41 @@ func TestNormalizeURL(t *testing.T) {
 			inputURL: "https://BLOG.boot.dev/path/",
 			expected: "blog.boot.dev/path",
 		},
+		{
+			name:     "root path with slash",
+			inputURL: "https://blog.boot.dev/",
+			expected: "blog.boot.dev/",
+		},
+		{
+			name:     "root path without slash",
+			inputURL: "https://blog.boot.dev",
+			expected: "blog.boot.dev/",
+		},
+		{
+			name:     "remove fragment",
+			inputURL: "https://blog.boot.dev/path#section",
+			expected: "blog.boot.dev/path",
+		},
+		{
+			name:     "remove query string",
+			inputURL: "https://blog.boot.dev/path?foo=bar",
+			expected: "blog.boot.dev/path",
+		},
+		{
+			name:     "remove query and fragment",
+			inputURL: "https://blog.boot.dev/path/?foo=bar#section",
+			expected: "blog.boot.dev/path",
+		},
+		{
+			name:     "keep port number",
+			inputURL: "https://blog.boot.dev:8080/path",
+			expected: "blog.boot.dev:8080/path",
+		},
+		{
+			name:     "empty path",
+			inputURL: "https://blog.boot.dev",
+			expected: "blog.boot.dev/",
+		},
 	}
 
 	for i, tc := range tests {
