@@ -1,10 +1,9 @@
 package main
 
 import (
+	"golang.org/x/net/html"
 	"net/url"
 	"strings"
-
-	"golang.org/x/net/html"
 )
 
 func normalizeURL(unformattedUrl string) (string, error) {
@@ -22,7 +21,6 @@ func normalizeURL(unformattedUrl string) (string, error) {
 
 }
 
-// TODO:
 func getURLsFromHTML(htmlBody, rawBaseURL string) ([]string, error) {
 	baseUrl, err := url.Parse(rawBaseURL)
 	if err != nil {
