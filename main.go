@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -110,15 +111,6 @@ func (cfg *config) crawlPage(rawCurrentURL string) {
 
 }
 
-func printReport(pages map[string]int, baseURL string) {
-	fmt.Println("=============================")
-	fmt.Printf("REPORT for %s\n", baseURL)
-	fmt.Println("=============================")
-
-	// TODO: format here
-
-}
-
 func getHTML(rawURL string) (string, error) {
 	resp, err := http.Get(rawURL)
 	if err != nil {
@@ -138,4 +130,32 @@ func getHTML(rawURL string) (string, error) {
 		return "", err
 	}
 	return string(htmlString), nil
+}
+
+type PageCount struct {
+	URL   string
+	Count int
+}
+
+func printReport(pages map[string]int, baseURL string) {
+	fmt.Println("=============================")
+	fmt.Printf("REPORT for %s\n", baseURL)
+	fmt.Println("=============================")
+
+	var visited []PageCount
+	for url, count := range pages {
+		visited = append(visited, PageCount{URL: url, Count: count})
+	}
+
+	sort.Slice(visited, func(i, j int) bool {
+		if visited[i].Count != visited[j].Count {
+			return visited[i].Count > visited[j].Count // Descending count
+		}
+		return visited[i].URL < visited[j].URL // Ascending URL
+	})
+
+	for _, page := range visited {
+		fmt.Printf("Found %d internal links to %s\n", page.Count, page.URL)
+	}
+
 }
